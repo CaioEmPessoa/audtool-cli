@@ -19,7 +19,8 @@ class audTool():
     def __init__(self):
         super().__init__()
 
-        self.currentPageNumb = 1
+        self.startPageNumb = 1
+        self.cursorPos = 0
         self.songsArray = [
             # {
                 # songName:  str
@@ -27,6 +28,7 @@ class audTool():
             # }
         ]
         self.allSongs = []
+        self.results = []
         self.indexingSongs = True
         self.running = True
 
@@ -37,7 +39,7 @@ class audTool():
 
         self.loadList()
 
-        threading.Thread(target=self.loadAllSongs).start()
+        # threading.Thread(target=self.loadAllSongs).start()
         threading.Thread(target=self.handleInput).start()
         threading.Thread(target=self.start).start().join()
 
@@ -46,25 +48,28 @@ class audTool():
     def start(self):
         while self.running:
             self.loadList() # Load info that will be printed with printInfo.
-            # print(f"\033[1J\n{self.printInfo()}", end="", flush=True) # prints the info.
-            print(self.printInfo()) # prints the info.
+            print(f"\033[1J\n{self.printInfo()}", end="", flush=True) # prints the info.
             sleep(0.01)
 
     def execShell(self, command):
         output = subprocess.check_output(command, shell=True)
+        output = output.decode("utf-8")
         return output
 
     def loadAllSongs(self):
-        # change into audtool --playlist-display
-        i = 1
-        while (i <= self.songAmmnt):
+        allSongsStr = self.execShell("audtool --playlist-display")
+        allSongsArr = allSongsStr.split("\n")
+        allSongsArr = allSongsArr[1:len(allSongsArr)-1]
+
+        for i in allSongsArr:
+            songName = re.search(r'(?<=\|).*(?=\|)', i)
+            songIndex = re.search(r'\d+ (?=\|)', i)
             self.allSongs.append(
                 {
-                    "songName": self.execShell(f"audtool --playlist-song {i}"),
-                    "songIndex": i
+                    "songName": songName.group(),
+                    "songIndex": int(songIndex.group())
                 }
             )
-            i+=1
 
         self.indexingSongs = False
 
@@ -73,12 +78,12 @@ class audTool():
         self.songsArray = [] # clear songsArray before updating it
 
         # Populate songsArray list
-        lastIndex = PAGE_SIZE + self.currentPageNumb-1
-        i = self.currentPageNumb
+        lastIndex = PAGE_SIZE + self.startPageNumb-1
+        i = self.startPageNumb
         while (i <= lastIndex):
             self.songsArray.append(
                 {
-                    "songName": self.execShell(f"audtool --playlist-song {i}"),
+                    "songName": self.execShell(f"audtool --playlist-song {i}").replace("\n", ""),
                     "songIndex": i
                 }
             )
@@ -91,12 +96,15 @@ class audTool():
         if (self.indexingSongs):
             info.append("Indexing all songs... Search not enabled.")
 
-        for i in self.songsArray:
-            selected = False
-            if (self.songsArray.index(i) == 0):
-                selected = True
+        shownArray = self.songsArray if len(self.results) == 0 else self.results
 
+        item = 0
+        for i in shownArray:
+            selected = False if item != 0 else True
+            self.startPageNumb = i["songIndex"] if selected else self.startPageNumb
             info.append(f"{">" if selected else ""} {i["songIndex"]} - {i["songName"]}")
+
+            item+=1
 
         info.append(f"Songs in Playlist: {self.songAmmnt}")
         info.append("")
@@ -145,22 +153,22 @@ class audTool():
                 # === MOVING LIST ===
                 # --- moving one ---
                 case keys.UP:
-                    if(self.currentPageNumb > 1):
-                        self.currentPageNumb -= 1
+                    if(self.cursorPos > 1):
+                        self.cursorPos -= 1
                 case keys.DOWN:
-                    if(self.currentPageNumb < self.songAmmnt):
-                        self.currentPageNumb += 1
+                    if(self.cursorPos < self.songAmmnt):
+                        self.cursorPos += 1
                 # --- moving page ---
                 case keys.RIGHT:
-                    if(self.currentPageNumb+PAGE_SIZE < self.songAmmnt):
-                        self.currentPageNumb += PAGE_SIZE
+                    if(self.startPageNumb+PAGE_SIZE < self.songAmmnt):
+                        self.startPageNumb += PAGE_SIZE
                     else:
-                        self.currentPageNumb = self.songAmmnt
+                        self.startPageNumb = self.songAmmnt
                 case keys.LEFT:
-                    if(self.currentPageNumb-PAGE_SIZE > 1):
-                        self.currentPageNumb -= PAGE_SIZE
+                    if(self.startPageNumb-PAGE_SIZE > 1):
+                        self.startPageNumb -= PAGE_SIZE
                     else:
-                        self.currentPageNumb = 1
+                        self.startPageNumb = 1
 
                 case keys.BACKSPACE:
                     self.generalInput = self.generalInput[:-1]
@@ -175,16 +183,22 @@ class audTool():
                             idSearch = int(idSearch.group())
 
                             if(idSearch != None):
-                                self.currentPageNumb = idSearch
+                                self.startPageNumb = idSearch
                     # Searching
                     elif (self.action == "SEARCH"):
+                        search = re.search(r'(?<=\?)[^>:?]+(?=[>:?]|$)', "".join(self.generalInput))
+                        if search:
+                            search = str(search.group())
+
+                            if(search != None):
+                                self.results = [item for item in self.allSongs if search in item["songName"]]
                         pass
 
                     # Song action.
                     elif (self.action == "ACTION"):
                         if (key == 'q'):
                             # Add current selected song to queue
-                            self.execShell(f"audtool --playqueue-add {self.currentPageNumb}")
+                            self.execShell(f"audtool --playqueue-add {self.startPageNumb}")
 
                         elif (key == 'c'):
                             # Add current selected song to queue
@@ -192,7 +206,7 @@ class audTool():
 
                         elif (key == 'p'):
                             # Play selected song
-                            self.execShell(f"audtool playlist-jump {self.currentPageNumb} --playback-play")
+                            self.execShell(f"audtool playlist-jump {self.startPageNumb} --playback-play")
                             pass
 
 
