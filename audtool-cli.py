@@ -53,7 +53,7 @@ class audTool():
 
     def loadAllSongs(self):
         i = 1
-        while (i <= self.songAmmnt/2):
+        while (i <= self.songAmmnt):
             self.allSongs.append(
                 {
                     "songName": self.execShell(f"audtool --playlist-song {i}"),
@@ -142,7 +142,7 @@ class audTool():
                 case _:
                     self.generalInput.append(key)
                     if(self.action == ACTIONS[1]): # searching
-                        idSearch = re.search(r'(?<=:)[1-9]\d+(?=\?|$)*', "".join(self.generalInput))
+                        idSearch = re.search(r'(?<=:)[1-9]\d*(?=\?|$)*', "".join(self.generalInput))
                         if idSearch:
                             idSearch = int(idSearch.group())
 
