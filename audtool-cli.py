@@ -1,3 +1,24 @@
+
+'''
+TODO:
+- Remove songsArray. Use just the "allsongs" method
+- Implement the cursor-like navigation
+- Fix problem loading allsongs method.
+- Fix search
+- Cursor navigation needs to:
+    * Move between long distant itens on search (jump from 2000 to 3000)
+    * Correclty play and queue current selected item
+    * Jump into pages and stay at same index of array
+
+Idea:
+    - Make one big array with all songs
+    - Strip it into 15 itens on listing
+    - You store just the index (1-15) and the real value on a different variable
+
+
+'''
+
+
 import subprocess
 from getkey import getkey, keys
 import threading
@@ -96,15 +117,12 @@ class audTool():
         if (self.indexingSongs):
             info.append("Indexing all songs... Search not enabled.")
 
-        shownArray = self.songsArray if len(self.results) == 0 else self.results
+        shownArray = self.getCurrentArray()
 
-        item = 0
         for i in shownArray:
-            selected = False if item != 0 else True
-            self.startPageNumb = i["songIndex"] if selected else self.startPageNumb
-            info.append(f"{">" if selected else ""} {i["songIndex"]} - {i["songName"]}")
+            selected = False if i["songIndex"] != self.cursorPos else True
 
-            item+=1
+            info.append(f"{">" if selected else ""} {i["songIndex"]} - {i["songName"]}")
 
         info.append(f"Songs in Playlist: {self.songAmmnt}")
         info.append("")
@@ -118,9 +136,6 @@ class audTool():
         info.append(f"> {"".join(self.generalInput)}")
         info.append("\n")
         return "\n".join(info)
-
-    def searchByString(self):
-        re.search()
 
     def handleInput(self):
         while self.running:
@@ -156,7 +171,7 @@ class audTool():
                     if(self.cursorPos > 1):
                         self.cursorPos -= 1
                 case keys.DOWN:
-                    if(self.cursorPos < self.songAmmnt):
+                    if(self.cursorPos < len(self.getCurrentArray())):
                         self.cursorPos += 1
                 # --- moving page ---
                 case keys.RIGHT:
@@ -198,7 +213,7 @@ class audTool():
                     elif (self.action == "ACTION"):
                         if (key == 'q'):
                             # Add current selected song to queue
-                            self.execShell(f"audtool --playqueue-add {self.startPageNumb}")
+                            self.execShell(f"audtool --playqueue-add {self.cursorPos}")
 
                         elif (key == 'c'):
                             # Add current selected song to queue
@@ -206,7 +221,7 @@ class audTool():
 
                         elif (key == 'p'):
                             # Play selected song
-                            self.execShell(f"audtool playlist-jump {self.startPageNumb} --playback-play")
+                            self.execShell(f"audtool playlist-jump {self.cursorPos} --playback-play")
                             pass
 
 
